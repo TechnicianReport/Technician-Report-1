@@ -1,7 +1,7 @@
 import { Helmet } from 'react-helmet-async';
 import { filter } from 'lodash';
 import { sentenceCase } from 'change-case';
-import { useState, useEffect } from 'react';
+import React, { useState, useEffect, Fragment } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { getFirestore, collection, query, onSnapshot, doc, getDocs, where, updateDoc, deleteDoc, addDoc, getDoc, documentId, setDoc } from '@firebase/firestore';
 import { getStorage, ref, uploadBytes, getDownloadURL } from 'firebase/storage';
@@ -73,7 +73,8 @@ const handleChange = (e) => {
     FullName: '',
     LocationRoom: '',
     Requisitioner: '',
-    Services: '',
+    Services: [],
+    otherServices: '',
     Remarks: '',
     fileInput: '',
     fileURL: '',
@@ -84,16 +85,17 @@ const handleChange = (e) => {
   };
 
   // Handle change function
-const [formData, setFormData] = useState({
-  ControlNum: '', // Add default values here
-  Date: '',       // Add default values here
-  FullName: '',   // Add default values here
-  LocationRoom: '', // Add default values here
-  Requisitioner: '', // Add default values here
-  Services: '',  // Add default values here
-  Remarks: '',
-  fileURL: '',    // Add default values here
-});
+  const [formData, setFormData] = useState({
+    ControlNum: null,
+    Date: '',
+    FullName: '',
+    LocationRoom: null,
+    Requisitioner: '',
+    Services: [], // If this is an array, it can be empty initially
+    otherServices: '',
+    Remarks: '',
+    fileURL: '',
+  });
 
 // Show Query or the table, fetch data from firestore
 
@@ -147,7 +149,7 @@ const [formData, setFormData] = useState({
  const handleSubmit = async (e) => {
   e.preventDefault();
 
-  const { ControlNum, Date, FullName, LocationRoom, Requisitioner, Services=[],Remarks, fileURL } = formData;
+  const { ControlNum, Date, FullName, LocationRoom, Requisitioner, Services=[], otherServices, Remarks, fileURL } = formData;
 
   try {
     // Use the current document name when adding a new document
@@ -162,6 +164,7 @@ const [formData, setFormData] = useState({
       LocationRoom,
       Requisitioner,
       Services,
+      otherServices,
       Remarks,
       fileURL: fileURL || '',
       archived: false, // Include the 'archived' field and set it to false for new documents
@@ -182,6 +185,7 @@ const [formData, setFormData] = useState({
     console.error(error);
     alert("Input cannot be incomplete");
   }
+  setFormData(initialFormData);
 };
 
   //  This one is for Search bar
@@ -227,6 +231,7 @@ const handleEditOpen = (data) => {
       LocationRoom: data.LocationRoom || '',
       Requisitioner: data.Requisitioner || '',
       Services: data.Services || '',
+      otherServices: data.otherServices || '',
       fileURL: data.fileURL || '',
       id: data.id, // Set the document ID here
     });
@@ -243,35 +248,23 @@ const handleEditClose = () => {
 
 const handleEditSubmit = async () => {
   try {
-    const docRef = doc(serviceRequestCollectionRef, formData.id); // Use the document ID for updating
+    // Include the checkbox values in editData
+    const updatedEditData = {
+      ...editData,
+      Services: formData.Services, // Update Services with checkbox values
+      // Include other properties here
+    };
+
+    const docRef = doc(serviceRequestCollectionRef, formData.id);
 
     // Update the editData object with the new file URL
-    editData.fileURL = formData.fileURL;
+    updatedEditData.fileURL = formData.fileURL;
 
-    await updateDoc(docRef, editData); // Use editData to update the document
+    await updateDoc(docRef, updatedEditData);
     handleEditClose();
     setSnackbarOpen1(true);
   } catch (error) {
     console.error("Error updating data in Firestore: ", error);
-  }
-};
-
-// This one is still for Edit button but for the file upload part
-
-
-const handleFileEditUpload = async (file) => {
-  const docRef = doc(serviceRequestCollectionRef, formData.id); // Use the document ID for updating
-  try {
-    if (file) {
-      const storageRef = ref(storage, `documents/${file.name}`);
-      await uploadBytes(storageRef, file);
-      const downloadURL = await getDownloadURL(storageRef);
-
-      // Update the Firestore document here using 'updateDoc' or another method
-      await updateDoc(docRef, { fileURL: downloadURL });
-    }
-  } catch (error) {
-    console.error("Error uploading file:", error);
   }
 };
 
@@ -404,40 +397,6 @@ const handleConfirmDelete = async () => {
   }
 };
       
-      const handleUploadSubmit = async (e) => {
-    e.preventDefault();
-
-    const { ControlNum, Date, FullName, LocationRoom, Requisitioner, Services, fileURL } = formData;
-
-    // Ensure that the fileURL is set to a default value or handle it appropriately
-    const docData = {
-      ControlNum,
-      Date,
-      FullName,
-      LocationRoom,
-      Requisitioner,
-      Services,
-      fileURL: fileURL || '', // Set a default value or handle it based on your use case
-    };
-
-    try {
-      const docRef = await addDoc(serviceRequestCollectionRef, docData);
-
-      const newDocumentId = docRef.id;
-
-      // Create a new data object that includes the ID
-      const newData = { ...docData, id: newDocumentId };
-
-      // Update the state with the new data, adding it to the table
-      setFetchedData([...fetchedData, newData]);
-      setOpen(false);
-      setSnackbarOpen(true);
-    } catch (error) {
-      console.error(error);
-      alert("Input cannot be incomplete");
-    }
-  };
-
   // This one is for Pagination
 
 
@@ -596,28 +555,26 @@ const handleViewClose = () => {
 
   const handleServiceChange = (e) => {
     const value = e.target.value;
-    console.log('Checkbox clicked:', value);
     const isChecked = e.target.checked;
-    let updatedServices;
   
-    if (isChecked) {
-      if (value === 'Others') {
-        updatedServices = [...formData.Services, formData.otherServices];
-      } else {
-        updatedServices = [...formData.Services, value];
-      }
-      console.log('Checkbox is checked', updatedServices);
-    } else {
-      updatedServices = formData.Services.filter((service) => service !== value);
-      console.log('Checkbox filtered', updatedServices);
+    if (isChecked && value !== ' Others:') {
+      // Add the new value to the array
+      setFormData((prevData) => ({
+        ...prevData,
+        Services: [...prevData.Services, value],
+      }));
+    } else if (!isChecked && value !== ' Others:') {
+      // Remove the selected service from the array
+      setFormData((prevData) => ({
+        ...prevData,
+        Services: prevData.Services.filter((service) => service !== value),
+      }));
     }
-    setFormData({ ...formData, Services: updatedServices });
   };
+
   
-  const handleOtherServicesChange = (e) => {
-    const value = e.target.value;
-    setFormData({ ...formData, otherServices: value });
-  };
+// This is for the edit button on checkboxes input (services)
+
   return (
     <>
       <Helmet>
@@ -681,7 +638,7 @@ const handleViewClose = () => {
 
         <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center' }}>
           <Button onClick={handleClickOpen} variant="contained" startIcon={<Iconify icon="eva:plus-fill" />}>
-            New User
+            New Document
           </Button>
         </div>
         
@@ -776,36 +733,37 @@ const handleViewClose = () => {
                     />
                     Repair
                     <br />
-
-                    <Checkbox
-                      value={formData.otherServices || ' Others,'}
-                      checked={formData.Services.includes(' Others,')}
-                      onChange={handleServiceChange}
-                    />
+                    <div style={{ marginLeft: '42px' }}> 
                     Others:
                     <input
-                      type="text"
-                      value={formData.otherServices}
-                      onChange={handleOtherServicesChange}
-                      disabled={!formData.Services.includes(' Others,')}
+                    type="text"
+                    name="Others:"
+                    value={formData.otherServices || ''}
+                    onChange={(e) => setFormData({ ...formData, otherServices: e.target.value })}
                     />
+                      </div>
                   </fieldset>
                   <br/>
-                  <TextField
+                  <Typography variant="subtitle1">Remarks:</Typography>
+                  <TextareaAutosize
                     type="text"
                     name="Remarks"
                     placeholder="Remarks"
                     value={formData.Remarks || ''}
                     onChange={(e) => setFormData({ ...formData, Remarks: e.target.value })}
-                    sx={{ width: '100%', marginBottom: '10px' }}
+                    minRows={8}
+                    maxRows={100}
+                    marginBottom="10px"
                   />
                   <br/>
+                  <Typography variant="subtitle1">File:</Typography>
                   <TextField
                     type="file"
                     accept=".pdf,.png,.jpg,.jpeg,.xlsx,.doc,.xls,text/plain"
                     onChange={(e) => handleFileUpload(e.target.files[0])}
                     sx={{ width: '100%' }}
                   />
+                  
                 </form>
               </DialogContent>
               <DialogActions>
@@ -857,6 +815,7 @@ const handleViewClose = () => {
                 <TableCell>Location/Room</TableCell>
                 <TableCell>Requesitioner</TableCell>
                 <TableCell>Services</TableCell>
+                <TableCell>Other Service</TableCell>
                 <TableCell>File</TableCell>
                 <TableCell>Menu</TableCell>
               </TableRow>
@@ -877,6 +836,7 @@ const handleViewClose = () => {
                   <TableCell>{item.LocationRoom}</TableCell>
                   <TableCell>{item.Requisitioner}</TableCell>
                   <TableCell>{item.Services}</TableCell>
+                  <TableCell>{item.otherServices}</TableCell>
                   <TableCell>
                     {item.fileURL ? (
                       // Render a clickable link to download the file
@@ -948,7 +908,7 @@ const handleViewClose = () => {
                     name="ControlNum"
                     placeholder="Control Number"
                     value={editData ? editData.ControlNum : ''}
-                    onChange={(e) => setEditData({ ...editData, Date: e.target.value })}
+                    onChange={(e) => setEditData({ ...editData, ControlNum: e.target.value })}
                     sx={{ width: '100%', marginBottom: '10px' }}
                   />
                   <br />
@@ -957,7 +917,7 @@ const handleViewClose = () => {
                     name="FullName"
                     placeholder="Faculty Name"
                     value={editData ? editData.FullName : ''}
-                    onChange={(e) => setEditData({ ...editData, Date: e.target.value })}
+                    onChange={(e) => setEditData({ ...editData, FullName: e.target.value })}
                     sx={{ width: '100%', marginBottom: '10px' }}
                   />
                   <br />
@@ -966,16 +926,16 @@ const handleViewClose = () => {
                     name="LocationRoom"
                     placeholder="Location/Room"
                     value={editData ? editData.LocationRoom : ''}
-                    onChange={(e) => setEditData({ ...editData, Date: e.target.value })}
+                    onChange={(e) => setEditData({ ...editData, LocationRoom: e.target.value })}
                     sx={{ width: '100%', marginBottom: '10px' }}
                   />
                   <br />
                   <TextField
                     type="text"
-                    name="Requesitioner"
-                    placeholder="Requesitioner"
+                    name="Requisitioner"
+                    placeholder="Requisitioner"
                     value={editData ? editData.Requisitioner : ''}
-                    onChange={(e) => setEditData({ ...editData, Date: e.target.value })}
+                    onChange={(e) => setEditData({ ...editData, Requisitioner: e.target.value })}
                     sx={{ width: '100%', marginBottom: '10px' }}
                   />
                   <br />
@@ -1017,37 +977,35 @@ const handleViewClose = () => {
                     />
                     Repair
                     <br />
-
-                    <Checkbox
-                      value={formData.otherServices || ' Others,'}
-                      checked={formData.Services.includes(' Others,')}
-                      onChange={handleServiceChange}
-                    />
+                    <div style={{ marginLeft: '42px' }}>
                     Others:
                     <input
                       type="text"
-                      value={formData.otherServices}
-                      onChange={handleOtherServicesChange}
-                      disabled={!formData.Services.includes(' Others,')}
+                      value={editData  ? editData .otherServices :''}
+                      onChange={(e) => setEditData({ ...editData, otherServices: e.target.value })}
                     />
+                    </div>
                   </fieldset>
                   <br/>
-                  <TextField
+                  <Typography variant="subtitle1">Remarks:</Typography>
+                  <TextareaAutosize
                     type="text"
                     name="Remarks"
                     placeholder="Remarks"
-                    value={editData ? editData.Remarks :''}
+                    value={editData  ? editData .Remarks :''}
                     onChange={(e) => setEditData({ ...editData, Remarks: e.target.value })}
                     sx={{ width: '100%', marginBottom: '10px' }}
                   />
                   <br/>
+                  <Typography variant="subtitle1">File:</Typography>
                   <TextField
                     type="file"
                     name="fileInput"
                     accept=".pdf,.png,.jpg,.jpeg,.xlsx,.doc,.xls,text/plain"
-                    onChange={(e) => handleFileEditUpload(e.target.files[0])}
+                    onChange={(e) => handleFileUpload(e.target.files[0])}
                     inputProps={{ className: "w-full rounded-md border border-stroke p-3 outline-none transition file:mr-4 file:rounded file:border-[0.5px] file:border-stroke dark:file:border-strokedark file:bg-[#EEEEEE] dark:file:bg-white/30 dark:file:text-white file:py-1 file:px-2.5 file:text-sm file:font-medium focus:border-primary file:focus:border-primary active:border-primary disabled:cursor-default disabled:bg-whiter dark:border-form-strokedark dark:bg-form-input" }}
                   />
+                  
 
           </form>
         </DialogContent>
@@ -1161,65 +1119,60 @@ const handleViewClose = () => {
                   <br />
 
                   <fieldset>
-                    <legend name="Services" >SERVICES:</legend>
+                    <legend name="Services">SERVICES:</legend>
                     <Checkbox
                       value=" Application Installation,"
-                      checked={formData.Services.includes(' Application Installation,')}
+                      checked={viewItem && viewItem.Services.includes(' Application Installation,')}
                       disabled
                     />
                     Application Installation
                     <br />
                     <Checkbox
                       value=" Network,"
-                      checked={formData.Services.includes(' Network,')}
+                      checked={viewItem && viewItem.Services.includes(' Network,')}
                       disabled
                     />
                     Network
                     <br />
                     <Checkbox
                       value=" Inventory,"
-                      checked={formData.Services.includes(' Inventory,')}
+                      checked={viewItem && viewItem.Services.includes(' Inventory,')}
                       disabled
                     />
                     Inventory
                     <br />
                     <Checkbox 
                       value=" Reformat,"
-                      checked={formData.Services.includes(' Reformat,')}
+                      checked={viewItem && viewItem.Services.includes(' Reformat,')}
                       disabled
                     />
                     Reformat
                     <br />
                     <Checkbox
                       value=" Repair,"
-                      checked={formData.Services.includes(' Repair,')}
+                      checked={viewItem && viewItem.Services.includes(' Repair,')}
                       disabled
                     />
                     Repair
                     <br />
-
-                    <Checkbox
-                      value={formData.otherServices || ' Others,'}
-                      checked={formData.Services.includes(' Others,')}
-                      disabled
-                    />
+                    <div style={{ marginLeft: '42px' }}>
                     Others:
                     <input
                       type="text"
-                      value={formData.otherServices}
-                      disabled={!formData.Services.includes(' Others,')}
+                      value={viewItem ? viewItem.otherServices : ''}
+                      disabled
                     />
+                    </div>
                   </fieldset>
                   <br/>
                 <Typography variant="subtitle1">Remarks:</Typography>
-                  <TextField
-                    type="text"
-                    name="Remarks"
-                    placeholder="Remarks"
-                    value={viewItem  ? viewItem .Remarks :''}
-                    disabled
-                    sx={{ width: '100%', marginBottom: '10px' }}
-                  />
+                <TextareaAutosize
+                  type="text"
+                  name="Remarks"
+                  placeholder="Remarks"
+                  value={viewItem ? viewItem.Remarks : ''}
+                  sx={{ width: '100%', marginBottom: '10px' }}
+                />
                   <br/>
                   <Typography variant="subtitle1">File:</Typography>
                     {viewItem && viewItem.fileURL ? (

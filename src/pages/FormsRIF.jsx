@@ -1,7 +1,7 @@
 import { Helmet } from 'react-helmet-async';
 import { filter } from 'lodash';
 import { sentenceCase } from 'change-case';
-import { useState, useEffect } from 'react';
+import React, { useState, useEffect, Fragment } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { getFirestore, collection, query, onSnapshot, doc, getDocs, where, updateDoc, deleteDoc, addDoc, getDoc, documentId, setDoc } from '@firebase/firestore';
 import { getStorage, ref, uploadBytes, getDownloadURL } from 'firebase/storage';
@@ -25,9 +25,6 @@ import { UserListHead, UserListToolbar } from '../sections/@dashboard/user';
 // mock
 import USERLIST from '../_mock/user';
 
-
-// ----------------------------------------------------------------------
-
 const firebaseConfig = {
   apiKey: "AIzaSyDHFEWRU949STT98iEDSYe9Rc-WxcL3fcc",
   authDomain: "wp4-technician-dms.firebaseapp.com",
@@ -36,6 +33,7 @@ const firebaseConfig = {
   messagingSenderId: "1065436189229",
   appId: "1:1065436189229:web:88094d3d71b15a0ab29ea4"
 };
+
 
 // Initialize Firebase
 const firebaseApp = initializeApp(firebaseConfig);
@@ -60,12 +58,11 @@ const archivesCollectionRef = collection(archivesRef, "ARCHIVES-FORMS");
 // Second declaration
 const storage = getStorage(firebaseApp);
 
-// ----------------------------------------------------------------------
-
 export default function UserPage() {
   const [fetchedData, setFetchedData] = useState([]);
   const [isLoading, setIsLoading] = useState(false);
 
+// Clear the whole form inputs
 const handleChange = (e) => {
   const { name, value } = e.target;
   setFormData({ ...formData, [name]: value });
@@ -77,28 +74,29 @@ const handleChange = (e) => {
     FullName: '',
     LocationRoom: '',
     Requisitioner: '',
-    Items: '',
+    Items: [],
+    otherItems: '',
     fileInput: '',
     fileURL: '',
   };
 
-  // For Clearing the Form
   const clearForm = () => {
     setFormData(initialFormData);
   };
 
   // Handle change function
   const [formData, setFormData] = useState({
-    ControlNum: '', // Add default values here
-    Date: '',       // Add default values here
-    FullName: '',   // Add default values here
-    LocationRoom: '', // Add default values here
-    Requisitioner: '', // Add default values here
-    Items: '',  // Add default values here
-    fileURL: '',    // Add default values here
+    ControlNum: null,
+    Date: '',
+    FullName: '',
+    LocationRoom: null,
+    Requisitioner: '',
+    Items: [], // If this is an array, it can be empty initially
+    otherItems: '',
+    fileURL: '',
   });
 
-  // Show Query or the table, fetch data from firestore
+// Show Query or the table, fetch data from firestore
 
   const fetchAllDocuments = async () => {
     setIsLoading(true);
@@ -128,7 +126,7 @@ const handleChange = (e) => {
 
   const currentDocumentName = "SRF-00"; // Initialize it with your default document name
 
-  // Function to increment the document name
+// Function to increment the document name
 
   const incrementDocumentName = async (nextNumber = 0) => {
     const newDocumentName = `SRF-${nextNumber.toString().padStart(2, "0")}`;
@@ -145,11 +143,12 @@ const handleChange = (e) => {
     return newDocumentName; // Return the generated document name
   };
 
-  // function for Adding new documents
+
+ // function for Adding new documents
  const handleSubmit = async (e) => {
   e.preventDefault();
 
-  const { ControlNum, Date, FullName, LocationRoom, Requisitioner, Items=[], fileURL } = formData;
+  const { ControlNum, Date, FullName, LocationRoom, Requisitioner, Items=[], otherItems, fileURL } = formData;
 
   try {
     // Use the current document name when adding a new document
@@ -164,9 +163,10 @@ const handleChange = (e) => {
       LocationRoom,
       Requisitioner,
       Items,
+      otherItems,
       fileURL: fileURL || '',
       archived: false, // Include the 'archived' field and set it to false for new documents
-      originalLocation: "REQUEST", // Include the 'originalLocation' field
+      originalLocation: "ITEM-REQUEST", // Include the 'originalLocation' field
     };
 
     await setDoc(docRef, docData);
@@ -183,9 +183,10 @@ const handleChange = (e) => {
     console.error(error);
     alert("Input cannot be incomplete");
   }
+  setFormData(initialFormData);
 };
 
-//  This one is for Search bar
+  //  This one is for Search bar
   const [searchQuery, setSearchQuery] = useState('');
 
 
@@ -213,7 +214,7 @@ const handleChange = (e) => {
     });
   });
 
-  // This one is for the Edit button
+// This one is for the Edit button
 const [editData, setEditData] = useState(null);
 const [editOpen, setEditOpen] = useState(false);
 
@@ -226,8 +227,9 @@ const handleEditOpen = (data) => {
       Date: data.Date || '',
       FullName: data.FullName || '',
       LocationRoom: data.LocationRoom || '',
-      Requisitioner: data.Requisitioner|| '',
+      Requisitioner: data.Requisitioner || '',
       Items: data.Items || '',
+      otherItems: data.otherItems || '',
       fileURL: data.fileURL || '',
       id: data.id, // Set the document ID here
     });
@@ -244,35 +246,23 @@ const handleEditClose = () => {
 
 const handleEditSubmit = async () => {
   try {
-    const docRef = doc(RequestCollectionRef, formData.id); // Use the document ID for updating
+    // Include the checkbox values in editData
+    const updatedEditData = {
+      ...editData,
+      Items: formData.Items, // Update Services with checkbox values
+      // Include other properties here
+    };
+
+    const docRef = doc(RequestCollectionRef, formData.id);
 
     // Update the editData object with the new file URL
-    editData.fileURL = formData.fileURL;
+    updatedEditData.fileURL = formData.fileURL;
 
-    await updateDoc(docRef, editData); // Use editData to update the document
+    await updateDoc(docRef, updatedEditData);
     handleEditClose();
     setSnackbarOpen1(true);
   } catch (error) {
     console.error("Error updating data in Firestore: ", error);
-  }
-};
-
-// This one is still for Edit button but for the file upload part
-
-
-const handleFileEditUpload = async (file) => {
-  const docRef = doc(RequestCollectionRef, formData.id); // Use the document ID for updating
-  try {
-    if (file) {
-      const storageRef = ref(storage, `documents/${file.name}`);
-      await uploadBytes(storageRef, file);
-      const downloadURL = await getDownloadURL(storageRef);
-
-      // Update the Firestore document here using 'updateDoc' or another method
-      await updateDoc(docRef, { fileURL: downloadURL });
-    }
-  } catch (error) {
-    console.error("Error uploading file:", error);
   }
 };
 
@@ -287,12 +277,14 @@ const handleConfirmDeleteWithoutArchive = async () => {
       const sourceDocumentData = (await getDoc(sourceDocumentRef)).data();
    
     await deleteDoc(doc(RequestCollectionRef, documentToDelete));
-
+    
     // Update the UI by removing the deleted row
     setFetchedData((prevData) => prevData.filter((item) => item.id !== documentToDelete));
     
     setSnackbarOpenDelete(true); // Show a success message
 
+    // setDocumentToDelete(documentId);
+    // setArchiveDialogOpen(true);
     }
   } catch (error) {
     console.error("Error deleting document:", error);
@@ -311,6 +303,8 @@ const handleDelete = (documentId) => {
   handleMenuClose();
 };
 
+
+
 // This one is for Archives
   
 const [snackbarOpenArchive, setSnackbarOpenArchive] = useState(false);
@@ -320,7 +314,7 @@ const handleConfirmDelete = async () => {
     if (documentToDelete) {
       const sourceDocumentRef = doc(RequestCollectionRef, documentToDelete);
       // Set the 'originalLocation' field to the current collection and update the Archive as true
-      await updateDoc(sourceDocumentRef, { archived: true, originalLocation: "REQUEST" });
+      await updateDoc(sourceDocumentRef, { archived: true, originalLocation: "ITEM-REQUEST" });
       const sourceDocumentData = (await getDoc(sourceDocumentRef)).data();
 
 
@@ -365,10 +359,10 @@ const handleConfirmDelete = async () => {
   }
 };
 
-// This one is for Uploading files 
+  // This one is for Uploading files 
 
 
-const handleFileUpload = async (file) => {
+  const handleFileUpload = async (file) => {
   try {
     const allowedFileTypes = [
       'application/pdf', // PDF
@@ -401,40 +395,6 @@ const handleFileUpload = async (file) => {
   }
 };
       
-      const handleUploadSubmit = async (e) => {
-    e.preventDefault();
-
-    const { ControlNum, Date, FullName, LocationRoom, Requisitioner, Items, fileURL } = formData;
-
-    // Ensure that the fileURL is set to a default value or handle it appropriately
-    const docData = {
-      ControlNum,
-      Date,
-      FullName,
-      LocationRoom,
-      Requisitioner,
-      Items,
-      fileURL: fileURL || '', // Set a default value or handle it based on your use case
-    };
-
-    try {
-      const docRef = await addDoc(RequestCollectionRef, docData);
-
-      const newDocumentId = docRef.id;
-
-      // Create a new data object that includes the ID
-      const newData = { ...docData, id: newDocumentId };
-
-      // Update the state with the new data, adding it to the table
-      setFetchedData([...fetchedData, newData]);
-      setOpen(false);
-      setSnackbarOpen(true);
-    } catch (error) {
-      console.error(error);
-      alert("Input cannot be incomplete");
-    }
-  };
-
   // This one is for Pagination
 
 
@@ -501,6 +461,8 @@ const handleSelectAll = () => {
   setSelectAll(!selectAll); // Toggle the selectAll state
 };
 
+
+
 // Checkbox bulk deletion
 
 const handleTrashIconClick = () => {
@@ -550,516 +512,665 @@ const handleConfirmDeleteAll = async () => {
   }
 };
 
+// This one is for view button
+const [viewItem, setViewItem] = useState(null);
+const [viewOpen, setViewOpen] = useState(false);
+
+const handleViewOpen = (item) => {
+  setViewItem(item);
+  setViewOpen(true);
+};
+
+const handleViewClose = () => {
+  setViewItem(null);
+  setViewOpen(false);
+};
 
 // This one is for idk lol
-const [open, setOpen] = useState(false);
+  const [open, setOpen] = useState(false);
 
-const [snackbarOpen, setSnackbarOpen] = useState(false);
+  const [snackbarOpen, setSnackbarOpen] = useState(false);
 
-const [snackbarOpen1, setSnackbarOpen1] = useState(false);
+  const [snackbarOpen1, setSnackbarOpen1] = useState(false);
 
-const [order, setOrder] = useState('asc');
+  const [order, setOrder] = useState('asc');
 
-const [selected, setSelected] = useState([]);
+  const [selected, setSelected] = useState([]);
 
-const [orderBy, setOrderBy] = useState('name');
+  const [orderBy, setOrderBy] = useState('name');
 
-const [filterName, setFilterName] = useState('');
+  const [filterName, setFilterName] = useState('');
 
 
-const handleClickOpen = () => {
-  setOpen(true);
-};
+  const handleClickOpen = () => {
+    setOpen(true);
+  };
 
-const handleClose = () => {
-  setOpen(false);
-};
-const [isOtherChecked, setIsOtherChecked] = useState(false);
+  const handleClose = () => {
+    setOpen(false);
+  };
+  const [isOtherChecked, setIsOtherChecked] = useState(false);
 
-const handleItemsChange = (e) => {
-  const value = e.target.value;
-  console.log('Checkbox clicked:', value);
-  const isChecked = e.target.checked;
-  let updatedItems;
-
-  if (isChecked) {
-    if (value === 'Others') {
-      updatedItems = [...formData.Items, formData.otherItems];
-    } else {
-      updatedItems = [...formData.Items, value];
+  const handleServiceChange = (e) => {
+    const value = e.target.value;
+    const isChecked = e.target.checked;
+  
+    if (isChecked && value !== ' Others:') {
+      // Add the new value to the array
+      setFormData((prevData) => ({
+        ...prevData,
+        Items: [...prevData.Items, value],
+      }));
+    } else if (!isChecked && value !== ' Others:') {
+      // Remove the selected service from the array
+      setFormData((prevData) => ({
+        ...prevData,
+        Items: prevData.Items.filter((service) => service !== value),
+      }));
     }
-    console.log('Checkbox is checked', updatedItems);
-  } else {
-    updatedItems = formData.Items.filter((Item) => Item !== value);
-    console.log('Checkbox filtered', updatedItems);
-  }
-  setFormData({ ...formData, Items: updatedItems });
-};
+  };
 
-const handleOtherItemsChange = (e) => {
-  const value = e.target.value;
-  setFormData({ ...formData, otherItems: value });
-};
+  return (
+    <>
+      <Helmet>
+        <title> Request Item's Form | Minimal UI </title>
+      </Helmet>
 
+      <Container>
 
-return (
-  <>
-    <Helmet>
-      <title> Request's Form | Minimal UI </title>
-    </Helmet>
+        <Stack direction="row" alignItems="center" justifyContent="space-between" mb={5}>
+      <Typography variant="h2" sx={{ mb: 5 }} style={{ color: '#ff5500' }}>
+        Request Item's Form
+      </Typography>
+    </Stack>
 
-    <Container>
-
-      <Stack direction="row" alignItems="center" justifyContent="space-between" mb={5}>
-    <Typography variant="h2" sx={{ mb: 5 }} style={{ color: '#ff5500' }}>
-      Request's Form
-    </Typography>
-  </Stack>
-
-  <Stack
-    direction="row"
-    alignItems="center"
-    justifyContent="space-between"
-    mb={5}
-    sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%' }}
-  >
-    <div style={{ display: 'flex', alignItems: 'center' }}>
-      <div>
-        <TextField
-          type="text"
-          placeholder="Search..."
-          value={searchQuery}
-          onChange={handleFilterByName}
-          sx={{ width: '%' }}
-        />
-      </div>
-
-      <div>
-        <Button
-          onClick={fetchAllDocuments}
-          variant="contained"
-          style={{
-            margin: '0 8px', // Add margin for spacing
-            display: 'flex',
-            justifyContent: 'center',
-            backgroundColor: 'transparent', // Set the background color to transparent
-            boxShadow: 'none', // Remove the box shadow
-          }}
-        >
-          <Iconify icon="zondicons:refresh" color="#2065D1" width={55} height={55} />
-        </Button>
-      </div>
-    </div>
-
-    <div style={{ marginLeft: '16px', display: 'flex', alignItems: 'center' }}>
-      {selectedItems.length > 0 && (
-        <div style={{ display: 'flex', alignItems: 'center' }}>
-          <IconButton onClick={handleTrashIconClick} >
-            <Iconify icon="material-symbols:delete-forever-outline-rounded" color="red" width={42} height={42} />
-          </IconButton>
-          <Typography variant="subtitle1" style={{ paddingRight: '16px' }}>
-            {selectedItems.length} items selected
-          </Typography>
+    <Stack
+      direction="row"
+      alignItems="center"
+      justifyContent="space-between"
+      mb={5}
+      sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%' }}
+    >
+      <div style={{ display: 'flex', alignItems: 'center' }}>
+        <div>
+          <TextField
+            type="text"
+            placeholder="Search..."
+            value={searchQuery}
+            onChange={handleFilterByName}
+            sx={{ width: '%' }}
+          />
         </div>
-      )}
 
-      <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center' }}>
-        <Button onClick={handleClickOpen} variant="contained" startIcon={<Iconify icon="eva:plus-fill" />}>
-          New User
-        </Button>
+        <div>
+          <Button
+            onClick={fetchAllDocuments}
+            variant="contained"
+            style={{
+              margin: '0 8px', // Add margin for spacing
+              display: 'flex',
+              justifyContent: 'center',
+              backgroundColor: 'transparent', // Set the background color to transparent
+              boxShadow: 'none', // Remove the box shadow
+            }}
+          >
+            <Iconify icon="zondicons:refresh" color="#2065D1" width={55} height={55} />
+          </Button>
+        </div>
       </div>
 
-      <Dialog open={open} onClose={handleClose}>
+      <div style={{ marginLeft: '16px', display: 'flex', alignItems: 'center' }}>
+        {selectedItems.length > 0 && (
+          <div style={{ display: 'flex', alignItems: 'center' }}>
+            <IconButton onClick={handleTrashIconClick} >
+              <Iconify icon="material-symbols:delete-forever-outline-rounded" color="red" width={42} height={42} />
+            </IconButton>
+            <Typography variant="subtitle1" style={{ paddingRight: '16px' }}>
+              {selectedItems.length} items selected
+            </Typography>
+          </div>
+        )}
+
+        <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center' }}>
+          <Button onClick={handleClickOpen} variant="contained" startIcon={<Iconify icon="eva:plus-fill" />}>
+            New Document
+          </Button>
+        </div>
+        
+        <Dialog open={open} onClose={handleClose}>
+          <div style={{ display: 'flex', flexDirection: 'row' }}>
+            <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+              <Typography variant="h3" sx={{ mb: 5 }} style={{ alignSelf: 'center', color: '#ff5500', margin: 'auto', fontSize: '40px', fontWeight: 'bold', marginTop:'10px' }}>
+                REQUEST ITEM
+              </Typography>
+              <DialogContent>
+                <form onSubmit={handleSubmit}>
+                  <TextField
+                    type="date"
+                    name="Date"
+                    placeholder="Date"
+                    value={formData.Date || ''}
+                    onChange={(e) => setFormData({ ...formData, Date: e.target.value })}
+                    sx={{ width: '100%', marginBottom: '10px' }}
+                  />
+                  <br />
+                  <TextField
+                    type="text"
+                    name="ControlNum"
+                    placeholder="Control Number"
+                    value={formData.ControlNum || ''}
+                    onChange={(e) => setFormData({ ...formData, ControlNum: e.target.value })}
+                    sx={{ width: '100%', marginBottom: '10px' }}
+                  />
+                  <br />
+                  <TextField
+                    type="text"
+                    name="FullName"
+                    placeholder="Faculty Name"
+                    value={formData.FullName || ''}
+                    onChange={(e) => setFormData({ ...formData, FullName: e.target.value })}
+                    sx={{ width: '100%', marginBottom: '10px' }}
+                  />
+                  <br />
+                  <TextField
+                    type="text"
+                    name="LocationRoom"
+                    placeholder="Location/Room"
+                    value={formData.LocationRoom || ''}
+                    onChange={(e) => setFormData({ ...formData, LocationRoom: e.target.value })}
+                    sx={{ width: '100%', marginBottom: '10px' }}
+                  />
+                  <br />
+                  <TextField
+                    type="text"
+                    name="Requisitioner"
+                    placeholder="Requisitioner"
+                    value={formData.Requisitioner || ''}
+                    onChange={(e) => setFormData({ ...formData, Requisitioner: e.target.value })}
+                    sx={{ width: '100%', marginBottom: '10px' }}
+                  />
+                  <br />
+                  
+                  <fieldset>
+                    <legend name="Items" >ITEMS:</legend>
+                    <Checkbox
+                      value=" Mouse,"
+                      checked={formData.Items.includes(' Mouse,')}
+                      onChange={handleServiceChange}
+                    />
+                    Mouse 
+                    <br />
+                    <Checkbox
+                      value=" Keyboard,"
+                      checked={formData.Items.includes(' Keyboard,')}
+                      onChange={handleServiceChange}
+                    />
+                    Keyboard
+                    <br />
+                    <Checkbox
+                      value=" Monitor,"
+                      checked={formData.Items.includes(' Monitor,')}
+                      onChange={handleServiceChange}
+                    />
+                    Monitor
+                    <br />
+                    <Checkbox
+                      value=" AVR,"
+                      checked={formData.Items.includes(' AVR,')}
+                      onChange={handleServiceChange}
+                    />
+                    AVR
+                    <br />
+                    <Checkbox
+                      value=" CPU,"
+                      checked={formData.Items.includes(' CPU,')}
+                      onChange={handleServiceChange}
+                    />
+                    CPU
+                    <br />
+                    <div style={{ marginLeft: '42px' }}> 
+                    Others:
+                    <input
+                    type="text"
+                    name="Others:"
+                    value={formData.otherItems || ''}
+                    onChange={(e) => setFormData({ ...formData, otherItems: e.target.value })}
+                    />
+                      </div>
+                  </fieldset>
+                  <br/>
+                  <Typography variant="subtitle1">File:</Typography>
+                  <TextField
+                    type="file"
+                    accept=".pdf,.png,.jpg,.jpeg,.xlsx,.doc,.xls,text/plain"
+                    onChange={(e) => handleFileUpload(e.target.files[0])}
+                    sx={{ width: '100%' }}
+                  />
+                  
+                </form>
+              </DialogContent>
+              <DialogActions>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', margin: 'auto' }}>
+                  <Button variant="contained" onClick={clearForm} sx={{marginRight: '5px', marginLeft: '5px'}}>
+                    Clear
+                  </Button>
+                  <Button variant="contained" onClick={handleClose} sx={{marginRight: '5px', marginLeft: '5px'}}>
+                    Cancel
+                  </Button>
+                  <Button variant="contained" onClick={handleSubmit} type="submit" sx={{marginRight: '5px', marginLeft: '5px'}}>
+                    Create
+                  </Button>
+                </div>
+              </DialogActions>
+            </div>
+          </div>
+        </Dialog>
+      <Snackbar
+        open={snackbarOpen}
+        autoHideDuration={6000}
+        onClose={() => setSnackbarOpen(false)}
+        message="The Document was created successfully!"
+      />
+    </div>  
+  </Stack>       
+</Container>
+
+    
+
+<Container>
+      {isLoading ? (
+        <CircularProgress />
+      ) : (
+        <TableContainer component={Paper}>
+          <Table>
+            <TableHead>
+              <TableRow>
+                <TableCell>
+                <Checkbox
+                  checked={selectAll}
+                  onChange={handleSelectAll}
+                  color="primary"
+                />
+                </TableCell>
+                <TableCell>Control Number</TableCell>
+                <TableCell>Date</TableCell>
+                <TableCell>Full Name</TableCell>
+                <TableCell>Location/Room</TableCell>
+                <TableCell>Requisitioner</TableCell>
+                <TableCell>Items</TableCell>
+                <TableCell>Other Items</TableCell>
+                <TableCell>File</TableCell>
+                <TableCell>Menu</TableCell>
+              </TableRow>
+            </TableHead>
+            
+            <TableBody>
+              {displayedData.map((item, index) => (
+                <TableRow key={index}>
+                  <TableCell> 
+                      <Checkbox
+                        checked={selectedItems.includes(item.id)}
+                        onChange={() => handleSelection(item.id)}
+                      />
+                  </TableCell>
+                  <TableCell>{item.ControlNum}</TableCell>
+                  <TableCell>{item.Date}</TableCell>
+                  <TableCell>{item.FullName}</TableCell>
+                  <TableCell>{item.LocationRoom}</TableCell>
+                  <TableCell>{item.Requisitioner}</TableCell>
+                  <TableCell>{item.Items}</TableCell>
+                  <TableCell>{item.otherItems}</TableCell>
+                  <TableCell>
+                    {item.fileURL ? (
+                      // Render a clickable link to download the file
+                      <Link to={item.fileURL} target="_blank" download>
+                        Download 
+                      </Link>
+                    ) : (
+                      // Display "No File" if there's no file URL
+                      "No File"
+                    )}
+                  </TableCell>
+                  <TableCell>
+                    <IconButton
+                      aria-label="menu"
+                      onClick={(event) => handleMenuOpen(event, item)}
+                    >
+                      <MoreVertIcon />
+                    </IconButton>
+                  </TableCell>
+              </TableRow>
+
+              ))}
+            </TableBody>
+          </Table>
+        </TableContainer>
+      )}
+      <Dialog open={archiveDialogOpen} onClose={() => setArchiveDialogOpen(false)}>
+        <DialogTitle>Remove Document</DialogTitle>
+        <DialogContent>
+          Do you want to delete or archive this document?
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setArchiveDialogOpen(false)}>Cancel</Button>
+          <Button onClick={handleConfirmDeleteWithoutArchive} color="error">Delete</Button>
+          <Button onClick={handleConfirmDelete} style={{ color: 'orange' }}>Archive</Button>
+        </DialogActions>
+      </Dialog>
+       <TablePagination
+        rowsPerPageOptions={[4, 10, 25]}
+        component="div"
+        count={filteredData.length} // Make sure this reflects the total number of rows
+        rowsPerPage={rowsPerPage}
+        page={page}
+        onPageChange={handlePageChange}
+        onRowsPerPageChange={handleRowsPerPageChange}
+      />
+
+      {/* This is the dialog for the Edit button */}
+      <Dialog open={editOpen} onClose={handleEditClose}>
+        <div style={{ display: 'flex', flexDirection: 'row' }}>
+            <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+              <Typography variant="h3" sx={{ mb: 5 }} style={{ alignSelf: 'center', color: '#ff5500', margin: 'auto', fontSize: '40px', fontWeight: 'bold', marginTop:'10px' }}>
+                REQUEST ITEM
+              </Typography>
+        <DialogContent>
+          <form onSubmit={handleEditSubmit}>
+            {/* Fields to edit */}
+                  <TextField
+                    type="date"
+                    name="Date"
+                    placeholder="Date"
+                    value={editData ? editData.Date : ''}
+                    onChange={(e) => setEditData({ ...editData, Date: e.target.value })}
+                    sx={{ width: '100%', marginBottom: '10px' }}
+                  />
+                  <br />
+                  <TextField
+                    type="text"
+                    name="ControlNum"
+                    placeholder="Control Number"
+                    value={editData ? editData.ControlNum : ''}
+                    onChange={(e) => setEditData({ ...editData, ControlNum: e.target.value })}
+                    sx={{ width: '100%', marginBottom: '10px' }}
+                  />
+                  <br />
+                  <TextField
+                    type="text"
+                    name="FullName"
+                    placeholder="Faculty Name"
+                    value={editData ? editData.FullName : ''}
+                    onChange={(e) => setEditData({ ...editData, FullName: e.target.value })}
+                    sx={{ width: '100%', marginBottom: '10px' }}
+                  />
+                  <br />
+                  <TextField
+                    type="text"
+                    name="LocationRoom"
+                    placeholder="Location/Room"
+                    value={editData ? editData.LocationRoom : ''}
+                    onChange={(e) => setEditData({ ...editData, LocationRoom: e.target.value })}
+                    sx={{ width: '100%', marginBottom: '10px' }}
+                  />
+                  <br />
+                  <TextField
+                    type="text"
+                    name="Requisitioner"
+                    placeholder="Requisitioner"
+                    value={editData ? editData.Requisitioner : ''}
+                    onChange={(e) => setEditData({ ...editData, Requisitioner: e.target.value })}
+                    sx={{ width: '100%', marginBottom: '10px' }}
+                  />
+                  <br />
+
+                  <fieldset>
+                    <legend name="Items" >Items:</legend>
+                    <Checkbox
+                      value=" Mouse,"
+                      checked={formData.Items.includes(' Mouse,')}
+                      onChange={handleServiceChange}
+                    />
+                    Mouse
+                    <br />
+                    <Checkbox
+                      value=" Keyboard,"
+                      checked={formData.Items.includes(' Keyboard,')}
+                      onChange={handleServiceChange}
+                    />
+                    Keyboard
+                    <br />
+                    <Checkbox
+                      value=" Monitor,"
+                      checked={formData.Items.includes(' Monitor,')}
+                      onChange={handleServiceChange}
+                    />
+                    Monitor
+                    <Checkbox
+                      value=" AVR,"
+                      checked={formData.Items.includes(' AVR,')}
+                      onChange={handleServiceChange}
+                    />
+                    AVR
+                    <Checkbox
+                      value=" CPU,"
+                      checked={formData.Items.includes(' CPU,')}
+                      onChange={handleServiceChange}
+                    />
+                    CPU
+                    <br />
+                    <div style={{ marginLeft: '42px' }}>
+                    Others:
+                    <input
+                      type="text"
+                      value={editData  ? editData .otherItems :''}
+                      onChange={(e) => setEditData({ ...editData, otherItems: e.target.value })}
+                    />
+                    </div>
+                  </fieldset>
+                  <br/>
+                  <Typography variant="subtitle1">File:</Typography>
+                  <TextField
+                    type="file"
+                    name="fileInput"
+                    accept=".pdf,.png,.jpg,.jpeg,.xlsx,.doc,.xls,text/plain"
+                    onChange={(e) => handleFileUpload(e.target.files[0])}
+                    inputProps={{ className: "w-full rounded-md border border-stroke p-3 outline-none transition file:mr-4 file:rounded file:border-[0.5px] file:border-stroke dark:file:border-strokedark file:bg-[#EEEEEE] dark:file:bg-white/30 dark:file:text-white file:py-1 file:px-2.5 file:text-sm file:font-medium focus:border-primary file:focus:border-primary active:border-primary disabled:cursor-default disabled:bg-whiter dark:border-form-strokedark dark:bg-form-input" }}
+                  />
+          </form>
+        </DialogContent>
+        <DialogActions>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', margin: 'auto' }}>
+            <Button variant="contained" onClick={handleEditClose} sx={{marginRight: '5px', marginLeft: '5px'}}>
+              Cancel
+            </Button>
+            <Button variant="contained" onClick={handleEditSubmit} type="submit" sx={{marginRight: '5px', marginLeft: '5px'}}>
+              Save
+            </Button>
+          </div>
+        </DialogActions>
+        </div>
+      </div>
+      </Dialog>
+      <Snackbar
+        open={snackbarOpen1}
+        autoHideDuration={6000}
+        onClose={() => setSnackbarOpen1(false)}
+        message="The Document was edited successfully!"
+      />
+      <Snackbar
+        open={snackbarOpenDelete}
+        autoHideDuration={6000}
+        onClose={() => setSnackbarOpenDelete(false)}
+        message="The Document was deleted successfully!"
+      />
+
+      <Snackbar
+        open={snackbarOpenArchive}
+        autoHideDuration={6000}
+        onClose={() => setSnackbarOpenArchive(false)}
+        message="The Document was archived successfully!"
+      />
+    <Popover
+      open={Boolean(menuAnchorEl)}
+      anchorEl={menuAnchorEl}
+      onClose={handleMenuClose}
+      anchorOrigin={{
+        vertical: 'bottom',
+        horizontal: 'right',
+      }}
+      transformOrigin={{
+        vertical: 'top',
+        horizontal: 'right',
+      }}
+    >
+      <MenuItem onClick={() => handleViewOpen(selectedItem)}>View</MenuItem>
+      <MenuItem onClick={() => handleEditOpen(selectedItem)}>Edit</MenuItem>
+      <MenuItem onClick={() => handleDelete(selectedItem.id)}>Remove</MenuItem>
+    </Popover>
+
+    {/* Dialog for View button */}
+      <Dialog open={viewOpen} onClose={handleViewClose}>
         <div style={{ display: 'flex', flexDirection: 'row' }}>
           <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
-            <Typography variant="h3" sx={{ mb: 5 }} style={{ alignSelf: 'center', color: '#ff5500', margin: 'auto', fontSize: '40px', fontWeight: 'bold', marginTop:'10px' }}>
-              REQUEST
+            <Typography variant="h3" sx={{ mb: 5 }} style={{ alignSelf: 'center', color: '#ff5500', margin: 'auto', fontSize: '40px', fontWeight: 'bold', marginTop: '10px' }}>
+              REQUEST ITEM 
             </Typography>
             <DialogContent>
-              <form onSubmit={handleSubmit}>
-                <TextField
-                  type="date"
-                  name="Date"
-                  placeholder="Date"
-                  value={formData.Date || ''}
-                  onChange={(e) => setFormData({ ...formData, Date: e.target.value })}
-                  sx={{ width: '100%', marginBottom: '10px' }}
-                />
-                <br />
-                <TextField
-                  type="text"
-                  name="ControlNum"
-                  placeholder="Control Number"
-                  value={formData.ControlNum || ''}
-                  onChange={(e) => setFormData({ ...formData, ControlNum: e.target.value })}
-                  sx={{ width: '100%', marginBottom: '10px' }}
-                />
-                <br />
-                <TextField
-                  type="text"
-                  name="FullName"
-                  placeholder="Faculty Name"
-                  value={formData.FullName || ''}
-                  onChange={(e) => setFormData({ ...formData, FullName: e.target.value })}
-                  sx={{ width: '100%', marginBottom: '10px' }}
-                />
-                <br />
-                <TextField
-                  type="text"
-                  name="LocationRoom"
-                  placeholder="Location/Room"
-                  value={formData.LocationRoom || ''}
-                  onChange={(e) => setFormData({ ...formData, LocationRoom: e.target.value })}
-                  sx={{ width: '100%', marginBottom: '10px' }}
-                />
-                <br />
-                {/* Services fieldset goes here */}
-                <TextField
-                  type="text"
-                  name="Requisitioner"
-                  placeholder="Requisitioner"
-                  value={formData.Requisitioner || ''}
-                  onChange={(e) => setFormData({ ...formData, Requisitioner: e.target.value })}
-                  sx={{ width: '100%', marginBottom: '10px' }}
-                />
-                <br />
-                
-                <fieldset>
-                  <legend name="Items" >ITEMS:</legend>
-                  <Checkbox
-                    value=" Mouse,"
-                    checked={formData.Items.includes(' Mouse,')}
-                    onChange={handleItemsChange}
+                <Typography variant="subtitle1">Date:</Typography>
+                  <TextField
+                    type="date"
+                    name="Date"
+                    placeholder="Date"
+                    value={viewItem ? viewItem.Date : ''}
+                    disabled
+                    sx={{ width: '100%', marginBottom: '10px' }}
                   />
-                  Mouse
                   <br />
-                  <Checkbox
-                    value=" Keyboard,"
-                    checked={formData.Items.includes(' Keyboard,')}
-                    onChange={handleItemsChange}
-                  />
-                  Keyboard
-                  <br />
-                  <Checkbox
-                    value=" Monitor,"
-                    checked={formData.Items.includes(' Monitor,')}
-                    onChange={handleItemsChange}
-                  />
-                  Monitor
-                  <br />
-                  <Checkbox
-                    value=" AVR,"
-                    checked={formData.Items.includes(' AVR,')}
-                    onChange={handleItemsChange}
-                  />
-                  AVR
-                  <br />
-                  <Checkbox
-                    value=" CPU,"
-                    checked={formData.Items.includes(' CPU,')}
-                    onChange={handleItemsChange}
-                  />
-                  CPU
-                  <br />
-                  <Checkbox
-                    value={formData.otherItems || ' Others,'}
-                    checked={formData.Items.includes(' Others,')}
-                    onChange={handleItemsChange}
-                  />
-                  Others:
-                  <input
+                <Typography variant="subtitle1">Control Number:</Typography>
+                  <TextField
                     type="text"
-                    value={formData.otherItems}
-                    onChange={handleOtherItemsChange}
-                    disabled={!formData.Items.includes(' Others,')}
+                    name="ControlNum"
+                    placeholder="Control Number"
+                    value={viewItem  ? viewItem .ControlNum : ''}
+                    disabled
+                    sx={{ width: '100%', marginBottom: '10px' }}
                   />
-                </fieldset>         
-                <br/>
-                <TextField
-                  type="file"
-                  accept=".pdf,.png,.jpg,.jpeg,.xlsx,.doc,.xls,text/plain"
-                  onChange={(e) => handleFileUpload(e.target.files[0])}
-                  sx={{ width: '100%' }}
-                />
-              </form>
+                  <br />
+                <Typography variant="subtitle1">Faculty Name:</Typography>
+                  <TextField
+                    type="text"
+                    name="FullName"
+                    placeholder="Faculty Name"
+                    value={viewItem  ? viewItem .FullName : ''}
+                    disabled
+                    sx={{ width: '100%', marginBottom: '10px' }}
+                  />
+                  <br />
+                <Typography variant="subtitle1">Location/Room:</Typography>
+                  <TextField
+                    type="text"
+                    name="LocationRoom"
+                    placeholder="Location/Room"
+                    value={viewItem  ? viewItem .LocationRoom : ''}
+                    disabled
+                    sx={{ width: '100%', marginBottom: '10px' }}
+                  />
+                  <br />
+                <Typography variant="subtitle1">Borrower:</Typography>
+                  <TextField
+                    type="text"
+                    name="Borrower"
+                    placeholder="Borrower"
+                    value={viewItem  ? viewItem .Borrower : ''}
+                    disabled
+                    sx={{ width: '100%', marginBottom: '10px' }}
+                  />
+                  <br />
+
+                  <fieldset>
+                    <legend name="Items">ITEMS:</legend>
+                    <Checkbox
+                      value=" Mouse,"
+                      checked={viewItem && viewItem.Items.includes(' Mouse,')}
+                      disabled
+                    />
+                    Mouse
+                    <br />
+                    <Checkbox
+                      value=" Keyboard,"
+                      checked={viewItem && viewItem.Items.includes(' Keyboard,')}
+                      disabled
+                    />
+                    Keyboard
+                    <br />
+                    <Checkbox
+                      value=" Monitor,"
+                      checked={viewItem && viewItem.Items.includes(' Monitor,')}
+                      disabled
+                    />
+                    Monitor
+                    <Checkbox
+                      value=" AVR,"
+                      checked={viewItem && viewItem.Items.includes(' AVR,')}
+                      disabled
+                    />
+                    AVR
+                    <Checkbox
+                      value=" CPU,"
+                      checked={viewItem && viewItem.Items.includes(' CPU,')}
+                      disabled
+                    />
+                    CPU
+                    <br />
+                    <div style={{ marginLeft: '42px' }}>
+                    Others:
+                    <input
+                      type="text"
+                      value={viewItem ? viewItem.otherItems : ''}
+                      disabled
+                    />
+                    </div>
+                  </fieldset>
+  
+                  <br/>
+                  <Typography variant="subtitle1">File:</Typography>
+                    {viewItem && viewItem.fileURL ? (
+                      <a href={viewItem.fileURL} target="_blank" rel="noreferrer noopener" download>
+                        View / Download File
+                      </a>
+                    ) : (
+                      "No File"
+                    )}
             </DialogContent>
-            <DialogActions>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', margin: 'auto' }}>
-                <Button variant="contained" onClick={clearForm} sx={{marginRight: '5px', marginLeft: '5px'}}>
-                  Clear
-                </Button>
-                <Button variant="contained" onClick={handleClose} sx={{marginRight: '5px', marginLeft: '5px'}}>
-                  Cancel
-                </Button>
-                <Button variant="contained" onClick={handleSubmit} type="submit" sx={{marginRight: '5px', marginLeft: '5px'}}>
-                  Create
-                </Button>
-              </div>
-            </DialogActions>
           </div>
         </div>
+        <DialogActions>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', margin: 'auto' }}>
+            <Button variant="contained" onClick={handleViewClose} sx={{ marginRight: '5px', marginLeft: '5px' }}>
+              Close
+            </Button>
+          </div>
+        </DialogActions>
       </Dialog>
-    <Snackbar
-      open={snackbarOpen}
-      autoHideDuration={6000}
-      onClose={() => setSnackbarOpen(false)}
-      message="The Request Document was created successfully!"
-    />
-  </div>  
-</Stack>       
-</Container>
-      
-      
-<Container>
-    {isLoading ? (
-      <CircularProgress />
-    ) : (
-      <TableContainer component={Paper}>
-        <Table>
-          <TableHead>
-            <TableRow>
-              <TableCell>
-              <Checkbox
-                checked={selectAll}
-                onChange={handleSelectAll}
-                color="primary"
-              />
-              </TableCell>
-              <TableCell>Control Number</TableCell>
-              <TableCell>Date</TableCell>
-              <TableCell>Full Name</TableCell>
-              <TableCell>Location/Room</TableCell>
-              <TableCell>Requisitioner</TableCell>
-              <TableCell>Items</TableCell>
-              <TableCell>File</TableCell>
-              <TableCell>Menu</TableCell>
-            </TableRow>
-          </TableHead>
-          
-          <TableBody>
-            {displayedData.map((item, index) => (
-              <TableRow key={index}>
-                <TableCell> 
-                    <Checkbox
-                      checked={selectedItems.includes(item.id)}
-                      onChange={() => handleSelection(item.id)}
-                    />
-                </TableCell>
-                <TableCell>{item.ControlNum}</TableCell>
-                <TableCell>{item.Date}</TableCell>
-                <TableCell>{item.FullName}</TableCell>
-                <TableCell>{item.LocationRoom}</TableCell>
-                <TableCell>{item.Requisitioner}</TableCell>
-                <TableCell>{item.Items}</TableCell>
-                <TableCell>
-                  {item.fileURL ? (
-                    // Render a clickable link to download the file
-                    <Link to={item.fileURL} target="_blank" download>
-                      Download 
-                    </Link>
-                  ) : (
-                    // Display "No File" if there's no file URL
-                    "No File"
-                  )}
-                </TableCell>
-                <TableCell>
-                  <IconButton
-                    aria-label="menu"
-                    onClick={(event) => handleMenuOpen(event, item)}
-                  >
-                    <MoreVertIcon />
-                  </IconButton>
-                </TableCell>
-            </TableRow>
 
-            ))}
-          </TableBody>
-        </Table>
-      </TableContainer>
-    )}
 
-    <Dialog open={editOpen} onClose={handleEditClose}>
-      <div style={{ display: 'flex', flexDirection: 'row' }}>
-          <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
-            <Typography variant="h3" sx={{ mb: 5 }} style={{ alignSelf: 'center', color: '#ff5500', margin: 'auto', fontSize: '40px', fontWeight: 'bold', marginTop:'10px' }}>
-              REQUEST
-            </Typography>
+    <Dialog
+      open={deleteConfirmationDialogOpen}
+      onClose={() => setDeleteConfirmationDialogOpen(false)}
+    >
+      <DialogTitle>Confirm Delete</DialogTitle>
       <DialogContent>
-        <form onSubmit={handleEditSubmit}>
-          {/* Fields to edit */}
-                <TextField
-                  type="date"
-                  name="Date"
-                  placeholder="Date"
-                  value={editData ? editData.Date : ''}
-                  onChange={(e) => setEditData({ ...editData, Date: e.target.value })}
-                  sx={{ width: '100%', marginBottom: '10px' }}
-                />
-                <br />
-                <TextField
-                  type="text"
-                  name="ControlNum"
-                  placeholder="Control Number"
-                  value={editData ? editData.ControlNum : ''}
-                  onChange={(e) => setEditData({ ...editData, ControlNum: e.target.value })}
-                  sx={{ width: '100%', marginBottom: '10px' }}
-                />
-                <br />
-                <TextField
-                  type="text"
-                  name="FullName"
-                  placeholder="Faculty Name"
-                  value={editData ? editData.FullName : ''}
-                  onChange={(e) => setEditData({ ...editData, FullName: e.target.value })}
-                  sx={{ width: '100%', marginBottom: '10px' }}
-                />
-                <br />
-                <TextField
-                  type="text"
-                  name="LocationRoom"
-                  placeholder="Location/Room"
-                  value={editData ? editData.LocationRoom : ''}
-                  onChange={(e) => setEditData({ ...editData, LocationRoom: e.target.value })}
-                  sx={{ width: '100%', marginBottom: '10px' }}
-                />
-                <br />
-                <TextField
-                  type="text"
-                  name="Requisitioner"
-                  placeholder="Requisitioner"
-                  value={editData ? editData.Requisitioner : ''}
-                  onChange={(e) => setEditData({ ...editData, Requisitioner: e.target.value })}
-                  sx={{ width: '100%', marginBottom: '10px' }}
-                />
-                <br />
-
-                <fieldset>
-                  <legend name="Items" >ITEMS:</legend>
-                  <Checkbox
-                    value=" Mouse,"
-                    checked={formData.Items.includes(' Mouse,')}
-                    onChange={handleItemsChange}
-                  />
-                  Mouse
-                  <br />
-                  <Checkbox
-                    value=" Keyboard,"
-                    checked={formData.Items.includes(' Keyboard,')}
-                    onChange={handleItemsChange}
-                  />
-                  Keyboard
-                  <br />
-                  <Checkbox
-                    value=" Monitor,"
-                    checked={formData.Items.includes(' Monitor,')}
-                    onChange={handleItemsChange}
-                  />
-                  Monitor
-                  <br />
-                  <Checkbox
-                    value=" AVR,"
-                    checked={formData.Items.includes(' AVR,')}
-                    onChange={handleItemsChange}
-                  />
-                  AVR
-                  <br />
-                  <Checkbox
-                    value=" CPU,"
-                    checked={formData.Items.includes(' CPU,')}
-                    onChange={handleItemsChange}
-                  />
-                  CPU
-                  <br />
-                  <Checkbox
-                    value={formData.otherItems || ' Others,'}
-                    checked={formData.Items.includes(' Others,')}
-                    onChange={handleItemsChange}
-                  />
-                  Others:
-                  <input
-                    type="text"
-                    value={formData.otherItems}
-                    onChange={handleOtherItemsChange}
-                    disabled={!formData.Items.includes(' Others,')}
-                  />
-                </fieldset>  
-
-                <br/>
-                <TextField
-                  type="file"
-                  name="fileInput"
-                  accept=".pdf,.png,.jpg,.jpeg,.xlsx,.doc,.xls,text/plain"
-                  onChange={(e) => handleFileEditUpload(e.target.files[0])}
-                  inputProps={{ className: "w-full rounded-md border border-stroke p-3 outline-none transition file:mr-4 file:rounded file:border-[0.5px] file:border-stroke dark:file:border-strokedark file:bg-[#EEEEEE] dark:file:bg-white/30 dark:file:text-white file:py-1 file:px-2.5 file:text-sm file:font-medium focus:border-primary file:focus:border-primary active:border-primary disabled:cursor-default disabled:bg-whiter dark:border-form-strokedark dark:bg-form-input" }}
-                />
-
-        </form>
+        Are you sure you want to delete {selectedItems.length} items?
       </DialogContent>
       <DialogActions>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', margin: 'auto' }}>
-          <Button variant="contained" onClick={handleEditClose} sx={{marginRight: '5px', marginLeft: '5px'}}>
-            Cancel
-          </Button>
-          <Button variant="contained" onClick={handleEditSubmit} type="submit" sx={{marginRight: '5px', marginLeft: '5px'}}>
-            Save
-          </Button>
-        </div>
+        <Button onClick={() => setDeleteConfirmationDialogOpen(false)}>Cancel</Button>
+        <Button onClick={handleConfirmDeleteAll} color="error">Delete</Button>
       </DialogActions>
-      </div>
-    </div>
     </Dialog>
 
-    <Snackbar
-      open={snackbarOpen1}
-      autoHideDuration={6000}
-      onClose={() => setSnackbarOpen1(false)}
-      message="The Request Document was edited successfully!"
-    />
-    <Snackbar
-      open={snackbarOpenDelete}
-      autoHideDuration={6000}
-      onClose={() => setSnackbarOpenDelete(false)}
-      message="The Request Document was deleted successfully!"
-    />
+        </Container>
 
-    <Snackbar
-      open={snackbarOpenArchive}
-      autoHideDuration={6000}
-      onClose={() => setSnackbarOpenArchive(false)}
-      message="The Request Document was archived successfully!"
-    />
-  <Popover
-    open={Boolean(menuAnchorEl)}
-    anchorEl={menuAnchorEl}
-    onClose={handleMenuClose}
-    anchorOrigin={{
-      vertical: 'bottom',
-      horizontal: 'right',
-    }}
-    transformOrigin={{
-      vertical: 'top',
-      horizontal: 'right',
-    }}
-  >
-    <MenuItem onClick={() => handleEditOpen(selectedItem)}>Edit</MenuItem>
-    <MenuItem onClick={() => handleDelete(selectedItem.id)}>Remove</MenuItem>
-  </Popover>
+    </>
+  );}
 
-  <Dialog
-    open={deleteConfirmationDialogOpen}
-    onClose={() => setDeleteConfirmationDialogOpen(false)}
-  >
-    <DialogTitle>Confirm Delete</DialogTitle>
-    <DialogContent>
-      Are you sure you want to delete {selectedItems.length} items?
-    </DialogContent>
-    <DialogActions>
-      <Button onClick={() => setDeleteConfirmationDialogOpen(false)}>Cancel</Button>
-      <Button onClick={handleConfirmDeleteAll} color="error">Delete</Button>
-    </DialogActions>
-  </Dialog>
 
-      </Container>
-
-  </>
-);}

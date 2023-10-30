@@ -1,7 +1,7 @@
 import { Helmet } from 'react-helmet-async';
 import { filter } from 'lodash';
 import { sentenceCase } from 'change-case';
-import { useState, useEffect } from 'react';
+import React, { useState, useEffect, Fragment } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { getFirestore, collection, query, onSnapshot, doc, getDocs, where, updateDoc, deleteDoc, addDoc, getDoc, documentId, setDoc } from '@firebase/firestore';
 import { getStorage, ref, uploadBytes, getDownloadURL } from 'firebase/storage';
@@ -24,7 +24,6 @@ import Scrollbar from '../components/scrollbar';
 import { UserListHead, UserListToolbar } from '../sections/@dashboard/user';
 // mock
 import USERLIST from '../_mock/user';
-// ----------------------------------------------------------------------
 
 const firebaseConfig = {
   apiKey: "AIzaSyDHFEWRU949STT98iEDSYe9Rc-WxcL3fcc",
@@ -34,6 +33,7 @@ const firebaseConfig = {
   messagingSenderId: "1065436189229",
   appId: "1:1065436189229:web:88094d3d71b15a0ab29ea4"
 };
+
 
 // Initialize Firebase
 const firebaseApp = initializeApp(firebaseConfig);
@@ -58,8 +58,7 @@ const archivesCollectionRef = collection(archivesRef, "ARCHIVES-FORMS");
 // Second declaration
 const storage = getStorage(firebaseApp);
 
-// ----------------------------------------------------------------------
-
+//  Clear the whole Form function
 export default function UserPage() {
   const [fetchedData, setFetchedData] = useState([]);
   const [isLoading, setIsLoading] = useState(false);
@@ -75,28 +74,29 @@ const handleChange = (e) => {
     FullName: '',
     LocationRoom: '',
     Borrower: '',
-    Items: '',
+    Items: [],
+    otherItems: '',
     fileInput: '',
     fileURL: '',
   };
 
-  // For Clearing the Form
   const clearForm = () => {
     setFormData(initialFormData);
   };
 
   // Handle change function
   const [formData, setFormData] = useState({
-    ControlNum: '', // Add default values here
-    Date: '',       // Add default values here
-    FullName: '',   // Add default values here
-    LocationRoom: '', // Add default values here
-    Borrower: '', // Add default values here
-    Items: '',  // Add default values here
-    fileURL: '',    // Add default values here
+    ControlNum: null,
+    Date: '',
+    FullName: '',
+    LocationRoom: null,
+    Borrower: '',
+    Items: [], // If this is an array, it can be empty initially
+    otherItems: '',
+    fileURL: '',
   });
 
-  // Show Query or the table, fetch data from firestore
+// Show Query or the table, fetch data from firestore
 
   const fetchAllDocuments = async () => {
     setIsLoading(true);
@@ -126,7 +126,7 @@ const handleChange = (e) => {
 
   const currentDocumentName = "SRF-00"; // Initialize it with your default document name
 
-  // Function to increment the document name
+// Function to increment the document name
 
   const incrementDocumentName = async (nextNumber = 0) => {
     const newDocumentName = `SRF-${nextNumber.toString().padStart(2, "0")}`;
@@ -143,11 +143,12 @@ const handleChange = (e) => {
     return newDocumentName; // Return the generated document name
   };
 
-  // function for Adding new documents
+
+ // function for Adding new documents
  const handleSubmit = async (e) => {
   e.preventDefault();
 
-  const { ControlNum, Date, FullName, LocationRoom, Borrower, Items=[], fileURL } = formData;
+  const { ControlNum, Date, FullName, LocationRoom, Borrower, Items=[], otherItems, fileURL } = formData;
 
   try {
     // Use the current document name when adding a new document
@@ -162,9 +163,10 @@ const handleChange = (e) => {
       LocationRoom,
       Borrower,
       Items,
+      otherItems,
       fileURL: fileURL || '',
       archived: false, // Include the 'archived' field and set it to false for new documents
-      originalLocation: "BORROWERS", // Include the 'originalLocation' field
+      originalLocation: "ITEM-BORROWERS", // Include the 'originalLocation' field
     };
 
     await setDoc(docRef, docData);
@@ -181,9 +183,10 @@ const handleChange = (e) => {
     console.error(error);
     alert("Input cannot be incomplete");
   }
+  setFormData(initialFormData);
 };
 
-//  This one is for Search bar
+  //  This one is for Search bar
   const [searchQuery, setSearchQuery] = useState('');
 
 
@@ -211,7 +214,7 @@ const handleChange = (e) => {
     });
   });
 
-  // This one is for the Edit button
+// This one is for the Edit button
 const [editData, setEditData] = useState(null);
 const [editOpen, setEditOpen] = useState(false);
 
@@ -226,6 +229,7 @@ const handleEditOpen = (data) => {
       LocationRoom: data.LocationRoom || '',
       Borrower: data.Borrower || '',
       Items: data.Items || '',
+      otherItems: data.otherItems || '',
       fileURL: data.fileURL || '',
       id: data.id, // Set the document ID here
     });
@@ -242,35 +246,23 @@ const handleEditClose = () => {
 
 const handleEditSubmit = async () => {
   try {
-    const docRef = doc(BorrowersCollectionRef, formData.id); // Use the document ID for updating
+    // Include the checkbox values in editData
+    const updatedEditData = {
+      ...editData,
+      Items: formData.Items, // Update Services with checkbox values
+      // Include other properties here
+    };
+
+    const docRef = doc(BorrowersCollectionRef, formData.id);
 
     // Update the editData object with the new file URL
-    editData.fileURL = formData.fileURL;
+    updatedEditData.fileURL = formData.fileURL;
 
-    await updateDoc(docRef, editData); // Use editData to update the document
+    await updateDoc(docRef, updatedEditData);
     handleEditClose();
     setSnackbarOpen1(true);
   } catch (error) {
     console.error("Error updating data in Firestore: ", error);
-  }
-};
-
-// This one is still for Edit button but for the file upload part
-
-
-const handleFileEditUpload = async (file) => {
-  const docRef = doc(BorrowersCollectionRef, formData.id); // Use the document ID for updating
-  try {
-    if (file) {
-      const storageRef = ref(storage, `documents/${file.name}`);
-      await uploadBytes(storageRef, file);
-      const downloadURL = await getDownloadURL(storageRef);
-
-      // Update the Firestore document here using 'updateDoc' or another method
-      await updateDoc(docRef, { fileURL: downloadURL });
-    }
-  } catch (error) {
-    console.error("Error uploading file:", error);
   }
 };
 
@@ -285,12 +277,14 @@ const handleConfirmDeleteWithoutArchive = async () => {
       const sourceDocumentData = (await getDoc(sourceDocumentRef)).data();
    
     await deleteDoc(doc(BorrowersCollectionRef, documentToDelete));
-
+    
     // Update the UI by removing the deleted row
     setFetchedData((prevData) => prevData.filter((item) => item.id !== documentToDelete));
     
     setSnackbarOpenDelete(true); // Show a success message
 
+    // setDocumentToDelete(documentId);
+    // setArchiveDialogOpen(true);
     }
   } catch (error) {
     console.error("Error deleting document:", error);
@@ -309,6 +303,8 @@ const handleDelete = (documentId) => {
   handleMenuClose();
 };
 
+
+
 // This one is for Archives
   
 const [snackbarOpenArchive, setSnackbarOpenArchive] = useState(false);
@@ -318,7 +314,7 @@ const handleConfirmDelete = async () => {
     if (documentToDelete) {
       const sourceDocumentRef = doc(BorrowersCollectionRef, documentToDelete);
       // Set the 'originalLocation' field to the current collection and update the Archive as true
-      await updateDoc(sourceDocumentRef, { archived: true, originalLocation: "BORROWERS" });
+      await updateDoc(sourceDocumentRef, { archived: true, originalLocation: "ITEM-BORROWERS" });
       const sourceDocumentData = (await getDoc(sourceDocumentRef)).data();
 
 
@@ -363,10 +359,10 @@ const handleConfirmDelete = async () => {
   }
 };
 
-// This one is for Uploading files 
+  // This one is for Uploading files 
 
 
-const handleFileUpload = async (file) => {
+  const handleFileUpload = async (file) => {
   try {
     const allowedFileTypes = [
       'application/pdf', // PDF
@@ -399,40 +395,6 @@ const handleFileUpload = async (file) => {
   }
 };
       
-      const handleUploadSubmit = async (e) => {
-    e.preventDefault();
-
-    const { ControlNum, Date, FullName, LocationRoom, Borrower, Items, fileURL } = formData;
-
-    // Ensure that the fileURL is set to a default value or handle it appropriately
-    const docData = {
-      ControlNum,
-      Date,
-      FullName,
-      LocationRoom,
-      Borrower,
-      Items,
-      fileURL: fileURL || '', // Set a default value or handle it based on your use case
-    };
-
-    try {
-      const docRef = await addDoc(BorrowersCollectionRef, docData);
-
-      const newDocumentId = docRef.id;
-
-      // Create a new data object that includes the ID
-      const newData = { ...docData, id: newDocumentId };
-
-      // Update the state with the new data, adding it to the table
-      setFetchedData([...fetchedData, newData]);
-      setOpen(false);
-      setSnackbarOpen(true);
-    } catch (error) {
-      console.error(error);
-      alert("Input cannot be incomplete");
-    }
-  };
-
   // This one is for Pagination
 
 
@@ -499,6 +461,8 @@ const handleSelectAll = () => {
   setSelectAll(!selectAll); // Toggle the selectAll state
 };
 
+
+
 // Checkbox bulk deletion
 
 const handleTrashIconClick = () => {
@@ -548,68 +512,75 @@ const handleConfirmDeleteAll = async () => {
   }
 };
 
+// This one is for view button
+const [viewItem, setViewItem] = useState(null);
+const [viewOpen, setViewOpen] = useState(false);
+
+const handleViewOpen = (item) => {
+  setViewItem(item);
+  setViewOpen(true);
+};
+
+const handleViewClose = () => {
+  setViewItem(null);
+  setViewOpen(false);
+};
 
 // This one is for idk lol
-const [open, setOpen] = useState(false);
+  const [open, setOpen] = useState(false);
 
-const [snackbarOpen, setSnackbarOpen] = useState(false);
+  const [snackbarOpen, setSnackbarOpen] = useState(false);
 
-const [snackbarOpen1, setSnackbarOpen1] = useState(false);
+  const [snackbarOpen1, setSnackbarOpen1] = useState(false);
 
-const [order, setOrder] = useState('asc');
+  const [order, setOrder] = useState('asc');
 
-const [selected, setSelected] = useState([]);
+  const [selected, setSelected] = useState([]);
 
-const [orderBy, setOrderBy] = useState('name');
+  const [orderBy, setOrderBy] = useState('name');
 
-const [filterName, setFilterName] = useState('');
+  const [filterName, setFilterName] = useState('');
 
 
-const handleClickOpen = () => {
-  setOpen(true);
-};
+  const handleClickOpen = () => {
+    setOpen(true);
+  };
 
-const handleClose = () => {
-  setOpen(false);
-};
-const [isOtherChecked, setIsOtherChecked] = useState(false);
+  const handleClose = () => {
+    setOpen(false);
+  };
+  const [isOtherChecked, setIsOtherChecked] = useState(false);
 
-const handleItemsChange = (e) => {
-  const value = e.target.value;
-  console.log('Checkbox clicked:', value);
-  const isChecked = e.target.checked;
-  let updatedItems;
-
-  if (isChecked) {
-    if (value === 'Others') {
-      updatedItems = [...formData.Items, formData.otherItems];
-    } else {
-      updatedItems = [...formData.Items, value];
+  const handleServiceChange = (e) => {
+    const value = e.target.value;
+    const isChecked = e.target.checked;
+  
+    if (isChecked && value !== ' Others:') {
+      // Add the new value to the array
+      setFormData((prevData) => ({
+        ...prevData,
+        Items: [...prevData.Items, value],
+      }));
+    } else if (!isChecked && value !== ' Others:') {
+      // Remove the selected service from the array
+      setFormData((prevData) => ({
+        ...prevData,
+        Items: prevData.Items.filter((service) => service !== value),
+      }));
     }
-    console.log('Checkbox is checked', updatedItems);
-  } else {
-    updatedItems = formData.Items.filter((Item) => Item !== value);
-    console.log('Checkbox filtered', updatedItems);
-  }
-  setFormData({ ...formData, Items: updatedItems });
-};
-
-const handleOtherItemsChange = (e) => {
-  const value = e.target.value;
-  setFormData({ ...formData, otherItems: value });
-};
+  };
 
   return (
     <>
       <Helmet>
-        <title> Borrower's Form | Minimal UI </title>
+        <title> Item Borrower's Form | Minimal UI </title>
       </Helmet>
 
       <Container>
 
         <Stack direction="row" alignItems="center" justifyContent="space-between" mb={5}>
       <Typography variant="h2" sx={{ mb: 5 }} style={{ color: '#ff5500' }}>
-        Borrower's Form
+        Item Borrower's Form
       </Typography>
     </Stack>
 
@@ -662,15 +633,15 @@ const handleOtherItemsChange = (e) => {
 
         <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center' }}>
           <Button onClick={handleClickOpen} variant="contained" startIcon={<Iconify icon="eva:plus-fill" />}>
-            New User
+            New Document
           </Button>
         </div>
-
+        
         <Dialog open={open} onClose={handleClose}>
           <div style={{ display: 'flex', flexDirection: 'row' }}>
             <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
               <Typography variant="h3" sx={{ mb: 5 }} style={{ alignSelf: 'center', color: '#ff5500', margin: 'auto', fontSize: '40px', fontWeight: 'bold', marginTop:'10px' }}>
-                BORROWERS
+                ITEM BORROWER
               </Typography>
               <DialogContent>
                 <form onSubmit={handleSubmit}>
@@ -710,7 +681,6 @@ const handleOtherItemsChange = (e) => {
                     sx={{ width: '100%', marginBottom: '10px' }}
                   />
                   <br />
-                  {/* Services fieldset goes here */}
                   <TextField
                     type="text"
                     name="Borrower"
@@ -726,44 +696,43 @@ const handleOtherItemsChange = (e) => {
                     <Checkbox
                       value=" HDMI,"
                       checked={formData.Items.includes(' HDMI,')}
-                      onChange={handleItemsChange}
+                      onChange={handleServiceChange}
                     />
-                    HDMI
+                    HDMI 
                     <br />
                     <Checkbox
                       value=" Projector,"
                       checked={formData.Items.includes(' Projector,')}
-                      onChange={handleItemsChange}
+                      onChange={handleServiceChange}
                     />
                     Projector
                     <br />
                     <Checkbox
                       value=" TV,"
                       checked={formData.Items.includes(' TV,')}
-                      onChange={handleItemsChange}
+                      onChange={handleServiceChange}
                     />
                     TV
                     <br />
-                    <Checkbox
-                      value={formData.otherItems || ' Others,'}
-                      checked={formData.Items.includes(' Others,')}
-                      onChange={handleItemsChange}
-                    />
+                    <div style={{ marginLeft: '42px' }}> 
                     Others:
                     <input
-                      type="text"
-                      value={formData.otherItems}
-                      onChange={handleOtherItemsChange}
-                      disabled={!formData.Items.includes(' Others,')}
+                    type="text"
+                    name="Others:"
+                    value={formData.otherItems || ''}
+                    onChange={(e) => setFormData({ ...formData, otherItems: e.target.value })}
                     />
-                  </fieldset>         
+                      </div>
+                  </fieldset>
                   <br/>
+                  <Typography variant="subtitle1">File:</Typography>
                   <TextField
                     type="file"
                     accept=".pdf,.png,.jpg,.jpeg,.xlsx,.doc,.xls,text/plain"
                     onChange={(e) => handleFileUpload(e.target.files[0])}
                     sx={{ width: '100%' }}
                   />
+                  
                 </form>
               </DialogContent>
               <DialogActions>
@@ -786,13 +755,14 @@ const handleOtherItemsChange = (e) => {
         open={snackbarOpen}
         autoHideDuration={6000}
         onClose={() => setSnackbarOpen(false)}
-        message="The Borrower's Document was created successfully!"
+        message="The Document was created successfully!"
       />
     </div>  
   </Stack>       
 </Container>
-        
-        
+
+    
+
 <Container>
       {isLoading ? (
         <CircularProgress />
@@ -814,6 +784,7 @@ const handleOtherItemsChange = (e) => {
                 <TableCell>Location/Room</TableCell>
                 <TableCell>Borrower</TableCell>
                 <TableCell>Items</TableCell>
+                <TableCell>Other Items</TableCell>
                 <TableCell>File</TableCell>
                 <TableCell>Menu</TableCell>
               </TableRow>
@@ -834,6 +805,7 @@ const handleOtherItemsChange = (e) => {
                   <TableCell>{item.LocationRoom}</TableCell>
                   <TableCell>{item.Borrower}</TableCell>
                   <TableCell>{item.Items}</TableCell>
+                  <TableCell>{item.otherItems}</TableCell>
                   <TableCell>
                     {item.fileURL ? (
                       // Render a clickable link to download the file
@@ -860,12 +832,33 @@ const handleOtherItemsChange = (e) => {
           </Table>
         </TableContainer>
       )}
+      <Dialog open={archiveDialogOpen} onClose={() => setArchiveDialogOpen(false)}>
+        <DialogTitle>Remove Document</DialogTitle>
+        <DialogContent>
+          Do you want to delete or archive this document?
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setArchiveDialogOpen(false)}>Cancel</Button>
+          <Button onClick={handleConfirmDeleteWithoutArchive} color="error">Delete</Button>
+          <Button onClick={handleConfirmDelete} style={{ color: 'orange' }}>Archive</Button>
+        </DialogActions>
+      </Dialog>
+       <TablePagination
+        rowsPerPageOptions={[4, 10, 25]}
+        component="div"
+        count={filteredData.length} // Make sure this reflects the total number of rows
+        rowsPerPage={rowsPerPage}
+        page={page}
+        onPageChange={handlePageChange}
+        onRowsPerPageChange={handleRowsPerPageChange}
+      />
 
+      {/* This is the dialog for the Edit button */}
       <Dialog open={editOpen} onClose={handleEditClose}>
         <div style={{ display: 'flex', flexDirection: 'row' }}>
             <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
               <Typography variant="h3" sx={{ mb: 5 }} style={{ alignSelf: 'center', color: '#ff5500', margin: 'auto', fontSize: '40px', fontWeight: 'bold', marginTop:'10px' }}>
-                BORROWERS
+                ITEM BORROWER
               </Typography>
         <DialogContent>
           <form onSubmit={handleEditSubmit}>
@@ -921,46 +914,42 @@ const handleOtherItemsChange = (e) => {
                     <Checkbox
                       value=" HDMI,"
                       checked={formData.Items.includes(' HDMI,')}
-                      onChange={handleItemsChange}
+                      onChange={handleServiceChange}
                     />
                     HDMI
                     <br />
                     <Checkbox
                       value=" Projector,"
                       checked={formData.Items.includes(' Projector,')}
-                      onChange={handleItemsChange}
+                      onChange={handleServiceChange}
                     />
                     Projector
                     <br />
                     <Checkbox
                       value=" TV,"
                       checked={formData.Items.includes(' TV,')}
-                      onChange={handleItemsChange}
+                      onChange={handleServiceChange}
                     />
                     TV
                     <br />
-                    <Checkbox
-                      value={formData.otherItems || ' Others,'}
-                      checked={formData.Items.includes(' Others,')}
-                      onChange={handleItemsChange}
-                    />
+                    <div style={{ marginLeft: '42px' }}>
                     Others:
                     <input
                       type="text"
-                      value={formData.otherItems}
-                      onChange={handleOtherItemsChange}
-                      disabled={!formData.Items.includes(' Others,')}
+                      value={editData  ? editData .otherItems :''}
+                      onChange={(e) => setEditData({ ...editData, otherItems: e.target.value })}
                     />
+                    </div>
                   </fieldset>
                   <br/>
+                  <Typography variant="subtitle1">File:</Typography>
                   <TextField
                     type="file"
                     name="fileInput"
                     accept=".pdf,.png,.jpg,.jpeg,.xlsx,.doc,.xls,text/plain"
-                    onChange={(e) => handleFileEditUpload(e.target.files[0])}
+                    onChange={(e) => handleFileUpload(e.target.files[0])}
                     inputProps={{ className: "w-full rounded-md border border-stroke p-3 outline-none transition file:mr-4 file:rounded file:border-[0.5px] file:border-stroke dark:file:border-strokedark file:bg-[#EEEEEE] dark:file:bg-white/30 dark:file:text-white file:py-1 file:px-2.5 file:text-sm file:font-medium focus:border-primary file:focus:border-primary active:border-primary disabled:cursor-default disabled:bg-whiter dark:border-form-strokedark dark:bg-form-input" }}
                   />
-
           </form>
         </DialogContent>
         <DialogActions>
@@ -976,25 +965,24 @@ const handleOtherItemsChange = (e) => {
         </div>
       </div>
       </Dialog>
-
       <Snackbar
         open={snackbarOpen1}
         autoHideDuration={6000}
         onClose={() => setSnackbarOpen1(false)}
-        message="The Borrower's Document was edited successfully!"
+        message="The Document was edited successfully!"
       />
       <Snackbar
         open={snackbarOpenDelete}
         autoHideDuration={6000}
         onClose={() => setSnackbarOpenDelete(false)}
-        message="The Borrower's Document was deleted successfully!"
+        message="The Document was deleted successfully!"
       />
 
       <Snackbar
         open={snackbarOpenArchive}
         autoHideDuration={6000}
         onClose={() => setSnackbarOpenArchive(false)}
-        message="The Borrower's Document was archived successfully!"
+        message="The Document was archived successfully!"
       />
     <Popover
       open={Boolean(menuAnchorEl)}
@@ -1009,9 +997,123 @@ const handleOtherItemsChange = (e) => {
         horizontal: 'right',
       }}
     >
+      <MenuItem onClick={() => handleViewOpen(selectedItem)}>View</MenuItem>
       <MenuItem onClick={() => handleEditOpen(selectedItem)}>Edit</MenuItem>
       <MenuItem onClick={() => handleDelete(selectedItem.id)}>Remove</MenuItem>
     </Popover>
+
+    {/* Dialog for View button */}
+      <Dialog open={viewOpen} onClose={handleViewClose}>
+        <div style={{ display: 'flex', flexDirection: 'row' }}>
+          <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+            <Typography variant="h3" sx={{ mb: 5 }} style={{ alignSelf: 'center', color: '#ff5500', margin: 'auto', fontSize: '40px', fontWeight: 'bold', marginTop: '10px' }}>
+               ITEM BORROWER
+            </Typography>
+            <DialogContent>
+                <Typography variant="subtitle1">Date:</Typography>
+                  <TextField
+                    type="date"
+                    name="Date"
+                    placeholder="Date"
+                    value={viewItem ? viewItem.Date : ''}
+                    disabled
+                    sx={{ width: '100%', marginBottom: '10px' }}
+                  />
+                  <br />
+                <Typography variant="subtitle1">Control Number:</Typography>
+                  <TextField
+                    type="text"
+                    name="ControlNum"
+                    placeholder="Control Number"
+                    value={viewItem  ? viewItem .ControlNum : ''}
+                    disabled
+                    sx={{ width: '100%', marginBottom: '10px' }}
+                  />
+                  <br />
+                <Typography variant="subtitle1">Faculty Name:</Typography>
+                  <TextField
+                    type="text"
+                    name="FullName"
+                    placeholder="Faculty Name"
+                    value={viewItem  ? viewItem .FullName : ''}
+                    disabled
+                    sx={{ width: '100%', marginBottom: '10px' }}
+                  />
+                  <br />
+                <Typography variant="subtitle1">Location/Room:</Typography>
+                  <TextField
+                    type="text"
+                    name="LocationRoom"
+                    placeholder="Location/Room"
+                    value={viewItem  ? viewItem .LocationRoom : ''}
+                    disabled
+                    sx={{ width: '100%', marginBottom: '10px' }}
+                  />
+                  <br />
+                <Typography variant="subtitle1">Borrower:</Typography>
+                  <TextField
+                    type="text"
+                    name="Borrower"
+                    placeholder="Borrower"
+                    value={viewItem  ? viewItem .Borrower : ''}
+                    disabled
+                    sx={{ width: '100%', marginBottom: '10px' }}
+                  />
+                  <br />
+
+                  <fieldset>
+                    <legend name="Items">ITEMS:</legend>
+                    <Checkbox
+                      value=" HDMI,"
+                      checked={viewItem && viewItem.Items.includes(' HDMI,')}
+                      disabled
+                    />
+                    HDMI
+                    <br />
+                    <Checkbox
+                      value=" Projector,"
+                      checked={viewItem && viewItem.Items.includes(' Projector,')}
+                      disabled
+                    />
+                    Projector
+                    <br />
+                    <Checkbox
+                      value=" TV,"
+                      checked={viewItem && viewItem.Items.includes(' TV,')}
+                      disabled
+                    />
+                    TV
+                    <br />
+                    <div style={{ marginLeft: '42px' }}>
+                    Others:
+                    <input
+                      type="text"
+                      value={viewItem ? viewItem.otherItems : ''}
+                      disabled
+                    />
+                    </div>
+                  </fieldset>
+                  <br/>
+                  <Typography variant="subtitle1">File:</Typography>
+                    {viewItem && viewItem.fileURL ? (
+                      <a href={viewItem.fileURL} target="_blank" rel="noreferrer noopener" download>
+                        View / Download File
+                      </a>
+                    ) : (
+                      "No File"
+                    )}
+            </DialogContent>
+          </div>
+        </div>
+        <DialogActions>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', margin: 'auto' }}>
+            <Button variant="contained" onClick={handleViewClose} sx={{ marginRight: '5px', marginLeft: '5px' }}>
+              Close
+            </Button>
+          </div>
+        </DialogActions>
+      </Dialog>
+
 
     <Dialog
       open={deleteConfirmationDialogOpen}
