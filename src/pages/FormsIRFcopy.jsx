@@ -11,7 +11,7 @@ import { initializeApp } from 'firebase/app';
 import {Card,Table,Stack,Paper,Avatar,Popover,Checkbox,TableRow,
         MenuItem,TableBody,TableCell,Container,Typography,IconButton,TableContainer,
         TablePagination,Dialog, DialogTitle, DialogContent, DialogActions, Button, 
-        Backdrop, Snackbar, TableHead, CircularProgress, TextField} from '@mui/material';
+        Backdrop, Snackbar, TableHead, CircularProgress, TextField, Select} from '@mui/material';
 
 // components
 import DeleteIcon from '@mui/icons-material/Delete';
@@ -20,7 +20,6 @@ import TextareaAutosize from '@mui/material/TextareaAutosize';
 import Label from '../components/label';
 import Iconify from '../components/iconify';
 import Scrollbar from '../components/scrollbar';
-
 // sections
 import { UserListHead, UserListToolbar } from '../sections/@dashboard/user';
 // mock
@@ -63,47 +62,7 @@ const storage = getStorage(firebaseApp);
 // ----------------------------------------------------------------------
 
 //  Clear the whole Form function
-export default function FormsIRF() {
-// -------------------------testing for the dynamic input fields ---------------------------------------------
-
-const [inputField, setInputField] = useState ([
-  {Quantity: '', unitOfMeasure: '', Description: '', propertyNumber: '', dateAquired: '', unitCost: '', remarks: ''}
-  
-]);
-
-// const customContentStyle = {
-//   width: '80vh'
-// };
-
-
-const handleChangeInput = (index, event) => {
-  console.log(index, event.target.name)
-  const values = [...inputField];
-  values[index][event.target.name] = event.target.value;
-  setInputField(values);
-}
-
-
-const handleSubmitForm = (e) => {
-  e.preventDefault();
-  console.log("InputFields", inputField);
-}
-
-
-const handleAddField = () => {
-  setInputField([...inputField,  {Quantity: '', unitOfMeasure: '', Description: '', propertyNumber: '', dateAquired: '', unitCost: '', remarks: ''}])
-}
-
-
-const handleRemoveField = (index) => {
-  const values = [...inputField];
-  values.splice(index, 1);
-  setInputField(values);
-}
-// ----------------------------------------------------------------------
-
-
-
+export default function UserPage() {
   const [fetchedData, setFetchedData] = useState([]);
   const [isLoading, setIsLoading] = useState(false);
 
@@ -732,34 +691,27 @@ const handleViewClose = () => {
           </Button>
         </div>
         
-        <Dialog 
-          open={open} 
-          onClose={handleClose} 
-          fullWidth
-          maxWidth="sm"
-        >
+        <Dialog open={open} onClose={handleClose}>
           <div style={{ display: 'flex', flexDirection: 'row' }}>
-            <div style={{ flex: 10, display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+            <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
               <Typography variant="h3" sx={{ mb: 5 }} style={{ alignSelf: 'center', color: '#ff5500', margin: 'auto', fontSize: '40px', fontWeight: 'bold', marginTop:'10px' }}>
                 INSPECTION REPORT
               </Typography>
-              <DialogContent  
-              fullWidth
-              maxWidth="sm">
-                <form onSubmit={handleSubmit} >
+              <DialogContent>
+                <form onSubmit={handleSubmit}>
                   <TextField
                     type="date"
                     name="Date"
-                    variant="filled"
+                    placeholder="Date"
                     value={formData.Date || ''}
                     onChange={(e) => setFormData({ ...formData, Date: e.target.value })}
                     sx={{ width: '100%', marginBottom: '10px' }}
                   />
                   <br />
                   <TextField
+                    type="text"
                     name="ControlNum"
-                    variant="filled"
-                    label="Control Number"
+                    placeholder="Control Number"
                     value={formData.ControlNum || ''}
                     onChange={(e) => setFormData({ ...formData, ControlNum: e.target.value })}
                     sx={{ width: '100%', marginBottom: '10px' }}
@@ -768,8 +720,7 @@ const handleViewClose = () => {
                   <TextField
                     type="text"
                     name="FullName"
-                    variant="filled"
-                    label="Full Name"
+                    placeholder="Faculty Name"
                     value={formData.FullName || ''}
                     onChange={(e) => setFormData({ ...formData, FullName: e.target.value })}
                     sx={{ width: '100%', marginBottom: '10px' }}
@@ -778,8 +729,7 @@ const handleViewClose = () => {
                   <TextField
                     type="text"
                     name="LocationRoom"
-                    variant="filled"
-                    label="Location/Room"
+                    placeholder="Location/Room"
                     value={formData.LocationRoom || ''}
                     onChange={(e) => setFormData({ ...formData, LocationRoom: e.target.value })}
                     sx={{ width: '100%', marginBottom: '10px' }}
@@ -788,8 +738,7 @@ const handleViewClose = () => {
                   <TextField
                     type="text"
                     name="Inspection"
-                    variant="filled"
-                    label="Inspection"
+                    placeholder="Inspection"
                     value={formData.Inspection || ''}
                     onChange={(e) => setFormData({ ...formData, Inspection: e.target.value })}
                     sx={{ width: '100%', marginBottom: '10px' }}
@@ -798,8 +747,7 @@ const handleViewClose = () => {
                   <TextField
                     type="text"
                     name="InspectedBy"
-                    variant="filled"
-                    label="Inspection By"
+                    placeholder="InspectedBy"
                     value={formData.InspectedBy || ''}
                     onChange={(e) => setFormData({ ...formData, InspectedBy: e.target.value })}
                     sx={{ width: '100%', marginBottom: '10px' }}
@@ -808,8 +756,7 @@ const handleViewClose = () => {
                   <TextField
                     type="text"
                     name="NotedBy"
-                    variant="filled"
-                    label="Noted By"
+                    placeholder="NotedBy"
                     value={formData.NotedBy || ''}
                     onChange={(e) => setFormData({ ...formData, NotedBy: e.target.value })}
                     sx={{ width: '100%', marginBottom: '10px' }}
@@ -817,89 +764,16 @@ const handleViewClose = () => {
                   <br/>
                   <TextField
                     type="file"
-                    variant="filled"
                     accept=".pdf,.png,.jpg,.jpeg,.xlsx,.doc,.xls,text/plain"
                     onChange={(e) => handleFileUpload(e.target.files[0])}
                     sx={{ width: '100%' }}
                   />
-                  <br />
-
-                  {/* // ------------------------------ testing the dynamic form---------------------------------------- */}
-                  { inputField.map((inputField, index) => (
-                    <div key={index} >
-                      <TextField
-                        type='text'
-                        name ="Quantity"
-                        label="Quantity"
-                        variant="filled"
-                        value={inputField.Quantity}
-                        onChange={event => handleChangeInput(index, event)}
-                      />
-                      <TextField
-                        name ="unitOfMeasure"
-                        label="Unit Of Measure"
-                        variant="filled"
-                        value={inputField.unitOfMeasure}
-                        onChange={event => handleChangeInput(index, event)}
-                      />
-                      <TextField
-                        name ="Description"
-                        label="Description"
-                        multiline
-                        variant="filled"
-                        value={inputField.Description}
-                        onChange={event => handleChangeInput(index, event)}
-                      />
-                      <TextField
-                        name ="propertyNumber"
-                        label="Property Number"
-                        variant="filled"
-                        value={inputField.propertyNumber}
-                        onChange={event => handleChangeInput(index, event)}
-                      />
-                      <TextField
-                        name ="dateAquired"
-                        label="Date Aquired"
-                        variant="filled"
-                        value={inputField.dateAquired}
-                        onChange={event => handleChangeInput(index, event)}
-                      />
-                      <TextField
-                        name ="unitCost"
-                        label="Unit Cost"
-                        variant="filled"
-                        value={inputField.unitCost}
-                        onChange={event => handleChangeInput(index, event)}
-                      />
-                      <TextField
-                        name ="remarks"
-                        label="Remarks"
-                        variant="filled"
-                        value={inputField.remarks}
-                        onChange={event => handleChangeInput(index, event)}
-                      />
-                      <Button
-                      onClick = {()=>{handleAddField()}}>
-                        Add
-                      </Button>
-                      <Button onClick = {()=>{handleRemoveField(index)}}>
-                        Remove
-                      </Button>
-                        
-                      
-    
-                    </div>
-                  )) }
-
-
-
-
                 </form>
               </DialogContent>
               <DialogActions>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', margin: 'auto' }}>
-                  <Button variant="contained" onClick={handleSubmitForm} sx={{marginRight: '5px', marginLeft: '5px'}}>
-                    Save Form
+                  <Button variant="contained" onClick={clearForm} sx={{marginRight: '5px', marginLeft: '5px'}}>
+                    Clear
                   </Button>
                   <Button variant="contained" onClick={handleClose} sx={{marginRight: '5px', marginLeft: '5px'}}>
                     Cancel
