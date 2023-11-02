@@ -959,7 +959,9 @@ export default function FormsIRF() {
 
                     {inputField.map((inputField, index) => (
                       <div key={index}>
-                        <Grid container spacing={2}>
+                        <Grid container spacing={2} direction="row"
+  justifyContent="space-between"
+  alignItems="center">
                           {/* First Column */}
 
                           <Grid item xs={2.7}>
