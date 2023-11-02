@@ -824,9 +824,7 @@ export default function FormsIRF() {
                 Condemned Item
               </Typography>
               <DialogContent
-              // fullWidth
-              // maxWidth="lg"
-              // style={{ width: '1800px' }}
+
               >
                 <form onSubmit={handleSubmit}>
                   <Grid container spacing={1}>
