@@ -804,8 +804,7 @@ export default function FormsIRF() {
               open={open}
               onClose={handleClose}
               maxWidth="xl"
-              // fullWidth
-              // maxWidth="sm"
+              
             >
               {/* <div style={{ display: 'flex', flexDirection: 'row' }}> */}
               {/* <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', width:'1000px'}}> */}
