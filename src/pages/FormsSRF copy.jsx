@@ -11,7 +11,7 @@ import { initializeApp } from 'firebase/app';
 import {Card,Table,Stack,Paper,Avatar,Popover,Checkbox,TableRow,
         MenuItem,TableBody,TableCell,Container,Typography,IconButton,TableContainer,
         TablePagination,Dialog, DialogTitle, DialogContent, DialogActions, Button, 
-        Backdrop, Grid,   Snackbar, TableHead, CircularProgress, TextField, Select} from '@mui/material';
+        Backdrop, Snackbar, TableHead, CircularProgress, TextField, Select} from '@mui/material';
 
 // components
 import DeleteIcon from '@mui/icons-material/Delete';
@@ -649,9 +649,7 @@ const handleViewClose = () => {
                 SERVICE REQUEST
               </Typography>
               <DialogContent>
-
                 <form onSubmit={handleSubmit}>
-                  <Grid>
                   <TextField
                     type="date"
                     name="Date"
@@ -765,7 +763,7 @@ const handleViewClose = () => {
                     onChange={(e) => handleFileUpload(e.target.files[0])}
                     sx={{ width: '100%' }}
                   />
-                  </Grid>
+                  
                 </form>
               </DialogContent>
               <DialogActions>
